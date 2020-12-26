@@ -1,261 +1,121 @@
-"""
-EEG "Realtime" Visualizer
--------------------------
+# Reference
+# 1. https://github.com/kevinmgamboa/Plotting_OpenBCI_Cyton_Data_live
 
-@author: Kevin Machado Gamboa
-Created on Tue Oct 20 22:31:16 2020
-References:
-
-"""
-import mne
 import sys
-import numpy as np 
+
+from pyqtgraph.Qt import QtGui, QtCore
 import pyqtgraph as pg
+import random
+from pyOpenBCI import OpenBCICyton
+import threading
+import time
+import numpy as np
+from scipy import signal
 
-import pyOpenBCI as obci
-from pyOpenBCI import OpenBCICyton as cyton
+SCALE_FACTOR = (4500000) / 24 / (2 ** 23 - 1)  # From the pyOpenBCI repo
+colors = 'rgbycmwr'
 
-# sys.path.append('./')
-# import wavfile
-# GUI libraries
-from PyQt5.uic import loadUi
-from PyQt5.QtWidgets import QApplication, QMainWindow
-from PyQt5 import QtWidgets, QtGui
-# Own Lobrary
-import ppfunctions_1 as ppf
-
-from os.path import dirname as up
-mf_path = (up(__file__)).replace('\\','/')    # Main Folder Path
-
-DT = 8    # Display Window lenght in time
-UPT = 1   # Update time miliseconds
+# Set up GUI Layout
+app = QtGui.QApplication([])
+win = pg.GraphicsWindow(title='Python OpenBCI GUI')
+ts_plots = [win.addPlot(row=i, col=0, colspan=2, title='Channel %d' % i, labels={'left': 'uV'}) for i in range(1, 9)]
+fft_plot = win.addPlot(row=1, col=2, rowspan=4, title='FFT Plot', labels={'left': 'uV', 'bottom': 'Hz'})
+fft_plot.setLimits(xMin=1, xMax=125, yMin=0, yMax=1e7)
+waves_plot = win.addPlot(row=5, col=2, rowspan=4, title='EEG Bands', labels={'left': 'uV', 'bottom': 'EEG Band'})
+waves_plot.setLimits(xMin=0.5, xMax=5.5, yMin=0)
+waves_xax = waves_plot.getAxis('bottom')
+waves_xax.setTicks([list(zip(range(6), ('', 'Delta', 'Theta', 'Alpha', 'Beta', 'Gama')))])
+data = [[0, 0, 0, 0, 0, 0, 0, 0]]
 
 
-# def collect_eeg(sample):
-#     print("Data: %f, Lenght: %i " % (sample.channels_data[0], (sample.channels_data[0])))
+# Define OpenBCI callback function
+def save_data(sample):
+    global data
+    data.append([i * SCALE_FACTOR for i in sample.channels_data])
 
-class mainWindow(QMainWindow):
-    def __init__(self):
-        #Inicia el objeto QMainWindow
-        QMainWindow.__init__(self)
-        # Loads an .ui file & configure UI
-        loadUi("EEG_realtime_ui_v0.ui",self)
-        self.OBCI = cyton(port='/dev/ttyUSB0', daisy=False)
-        #
-#        _translate = QtCore.QCoreApplication.translate
-#        QMainWindow.setWindowTitle('AID')
-        # Variables
-        self.fs = None
-        self.data = None
-        self.data_P1 = None
-        self.t = -8
-        self.d_signal = np.zeros(512*DT)                 # Vector Label
-        self.duration = None
-        self.vectortime = None
-        self.file_path = str
-        self.plot_colors = ['#ffee3d' , '#0072bd', '#d95319', '#bd0000']
-        # Initial sub-functions
-        self._configure_plot()
-        self.buttons()
-        self.openF()
-        self.timer_1()
 
-    def collect_eeg(self, sample):
-        print("Data: %f, Lenght: %i " % (sample.channels_data[0], (sample.channels_data[0])))
+# Define function to update the graphs
+def updater():
+    global data, plots, colors
+    t_data = np.array(data[-1250:]).T  # transpose data
+    fs = 250  # Hz
 
-        self._plt1.plot(y=list(sample.channels_data[0]), pen=self.plot_colors[0])
+    # Notch Filter
+    def notch_filter(val, data, fs=250):
+        notch_freq_Hz = np.array([float(val)])
+        for freq_Hz in np.nditer(notch_freq_Hz):
+            bp_stop_Hz = freq_Hz + 3.0 * np.array([-1, 1])
+            b, a = signal.butter(3, bp_stop_Hz / (fs / 2.0), 'bandstop')
+            fin = data = signal.lfilter(b, a, data)
+        return fin
 
-    def _update_plot(self):
-        """
-        Updates and redraws the graphics in the plot.
-        """
-        #self.OBCI.start_stream(self.collect_eeg())
+    # Bandpass filter
+    def bandpass(start, stop, data, fs=250):
+        bp_Hz = np.array([start, stop])
+        b, a = signal.butter(5, bp_Hz / (fs / 2.0), btype='bandpass')
+        return signal.lfilter(b, a, data, axis=0)
 
-        self.duration = np.size(self.data._data[0]) * (1/self.fs)
-        self.vectortime = np.linspace(0, self.duration, np.size(self.data._data[0]))
+    # Applying the filters
+    nf_data = [[], [], [], [], [], [], [], []]
+    bp_nf_data = [[], [], [], [], [], [], [], []]
 
-        self.data_P1 = ppf.vec_nor(self.data._data[0])
-        
-        self.vlabel = np.zeros(len(self.data_P1))
-        
-        # Xf1 = 1+ppf.butter_bp_fil(self.data_P1, 40, 70, self.fs)
-        # Xf2 = 2+ppf.butter_bp_fil(self.data_P1, 70, 100, self.fs)
-        # Updating Plots
-        self._plt1.clear()
-        self._plt1.plot(x=list(self.vectortime), y=list(self.data_P1), pen=self.plot_colors[0])
-        #self._plt1.plot(x=list(self.vectortime), y=list(self.vlabel), pen=self.plot_colors[0])
+    for i in range(8):
+        nf_data[i] = notch_filter(60, t_data[i])
+        bp_nf_data[i] = bandpass(15, 80, nf_data[i])
 
-        self._plt2.clear()
-        self._plt2.plot(x=list(self.vectortime), y=list(self.data_P1), pen=self.plot_colors[0])
-        # self._plt2.plot(x=list(self.vectortime), y=list(Xf1), pen=self.plot_colors[1])
-        # self._plt2.plot(x=list(self.vectortime), y=list(Xf2), pen=self.plot_colors[2])
+    # Plot a time series of the raw data
+    for j in range(8):
+        ts_plots[j].clear()
+        ts_plots[j].plot(pen=colors[j]).setData(t_data[j])
 
-        # Add the LinearRegionItem to the ViewBox, but tell the ViewBox to exclude this 
-        # item when doing auto-range calculations.
-        self._plt1.addItem(self.region, ignoreBounds=True)      
-        self._plt2.setAutoVisible(y=True)
-        
-        self._plt2.addItem(self.region2, ignoreBounds=True) 
-        
-        self._plt2.addItem(self.vLine, ignoreBounds=True)
-        self._plt2.addItem(self.hLine, ignoreBounds=True)
-        
-        self.vb = self._plt2.vb
-        self.proxy = pg.SignalProxy(self._plt2.scene().sigMouseMoved, rateLimit=60, slot=self.mouseMoved)
-    # ------------------------------------------------------------------------
-                                     # Buttons
-    # ------------------------------------------------------------------------
-    def buttons(self):
-        """
-        Configures the connections between signals and UI elements.
-        """
-        self.openButton.clicked.connect(self.openF)
-        self.playButton.clicked.connect(self.playB)
-        self.stopButton.clicked.connect(self.stopB)
+    # Get an FFT of the data and plot it
+    sp = [[], [], [], [], [], [], [], []]
+    freq = [[], [], [], [], [], [], [], []]
 
-    def openF(self):
-        """
-        open a box to browse the audio file. Then converts the file into list 
-        to properly read the path of the audio file 
-        """
-        # self.file_path, _ = QtGui.QFileDialog.getOpenFileName(self, 'Open File')
-        # # NOTE: 
-        # self.data = mne.io.read_raw_edf(self.file_path, preload=True)
+    fft_plot.clear()
+    for k in range(8):
+        sp[k] = np.absolute(np.fft.fft(bp_nf_data[k]))
+        freq[k] = np.fft.fftfreq(bp_nf_data[k].shape[-1], 1.0 / fs)
+        fft_plot.plot(pen=colors[k]).setData(freq[k], sp[k])
 
-        self.data = mne.io.read_raw_edf(mf_path+'/Tests/Test_data/PN00-1.edf', preload=True)
-        self.fs = int(self.data.info['sfreq'])
-        print('data uploaded', self.data)
-    
-        print('sampling freq', str(self.fs))
-        # plots the signal loaded
-        self._update_plot()
+    # Define EEG bands
+    eeg_bands = {'Delta': (1, 4),
+                 'Theta': (4, 8),
+                 'Alpha': (8, 12),
+                 'Beta': (12, 30),
+                 'Gamma': (30, 45)}
 
-    def playB(self):
-        """
-        play the file 
-        """
-        print('playing')
-        self.OBCI.start_stream(self.collect_eeg)
-        #self.timer.start(UPT)
+    # Take the mean of the fft amplitude for each EEG band (Only consider first channel)
+    eeg_band_fft = dict()
+    sp_bands = np.absolute(np.fft.fft(t_data[1]))
+    freq_bands = np.fft.fftfreq(t_data[1].shape[-1], 1.0 / fs)
 
-    def stopB(self):
-        """
-        play the audio file 
-        """
-        print('Stop')
-        self.timer.stop()
-        self.reset_bufers()
-    # ------------------------------------------------------------------------
-                            # Plot Configuration
-    # ------------------------------------------------------------------------
-    def _configure_plot(self):
-        """
-        Configures specific elements of the PyQtGraph plots.
-        :return:
-        """
-        #self.mainW = pg.GraphicsWindow(title='Spectrogram', size=(800,600))
-        
-        #QMainWindow.setObjectName("AID")
-#        self.label = pg.LabelItem(justify='right')
-#        _mainWindow.addItem(self.label)
-        self.plt1.setBackground(background=None)
-        self.plt1.setAntialiasing(True)
-        self._plt1 = self.plt1.addPlot(row=1, col=1)
-        self._plt1.setLabel('bottom', "Tiempo", "s")
-        self._plt1.setLabel('left', "Amplitud", "Volt")
-        self._plt1.showGrid(x=False, y=False)
-        
-        self.plt2.setBackground(background=None)
-        self.plt2.setAntialiasing(True)
-        self._plt2 = self.plt2.addPlot(row=1, col=1)
-        self._plt2.setLabel('bottom', "Tiempo", "s")
-        self._plt2.setLabel('left', "Amplitud", "Volt")
-        self._plt2.showGrid(x=False, y=False)
-        
-        # Region 1 
-        self.region = pg.LinearRegionItem()
-        self.region.setZValue(1)
-        
-        self.region.sigRegionChanged.connect(self.update)
-        self._plt2.sigRangeChanged.connect(self.updateRegion)
-        self.region.setRegion([0, DT])
-        # Setting Region 2
-        self.region2 = pg.LinearRegionItem()
-        self.region2.setZValue(1)
-        self.region2.setRegion([0, 0.5])
-               
-        self.region2.sigRegionChanged.connect(self.update2)
-        
-        # cross hair
-        self.vLine = pg.InfiniteLine(angle=90, movable=False, pen=[100,100,200,200])
-        self.hLine = pg.InfiniteLine(angle=0, movable=False, pen=[100,100,200,200])
-    # ------------------------------------------------------------------------
-                             # Process - Updates
-    # ------------------------------------------------------------------------    
-    
-    def dis_update(self):
-        # 1st plot roll down one and replace leading edge with new data
-        self.d_signal = np.roll(self.d_signal, -self.fs, 0)
-        self.d_signal[-self.fs:] = self.data_P1[self.t*self.fs:(1+self.t)*self.fs]
-        
-        self._plt2.clear()
-        self._plt2.plot(x=list(self.vectortime[:self.fs*DT]), y=list(self.d_signal), pen=self.plot_colors[0])
-        
-        self.t+=1
-    
-    def update_otro(self):
-        self.region.setZValue(1)
-        minX, maxX = self.region.getRegion()     # get the min-max values of region
-        self._plt2.setXRange(self.t*1, (8+self.t), padding=0)
-        self.t+=1
-        
-        
-        
-    def update(self):
-        self.region.setZValue(1)
-        minX, maxX = self.region.getRegion()     # get the min-max values of region
-        self._plt2.setXRange(minX, maxX, padding=0)
-    
-    def updateRegion(self, window, viewRange):
-        rgn = viewRange[0]
-        self.region.setRegion(rgn)
-    
-    def update2(self):
-        self.region2.setZValue(-10)
-        self.minX2, self.maxX2 = self.region2.getRegion()     # get the min-max values of region
-#        self.label.setText("<span style='font-size: 12pt'>L1=%0.1f,   <span style='color: red'>L2=%0.1f</span>,   <span style='color: green'>L1-L2=%0.1f</span>" % (self.minX2, self.maxX2, abs(self.minX2-self.maxX2)))
-        #self._plt4.setXRange(minX3, maxX3, padding=0)
-        
-    def updateRegion2(self, window, viewRange):
-        rgn_f = viewRange[0]
-        self.region3.setRegion(rgn_f)
-    
-    def mouseMoved(self, evt):
-        pos = evt[0]  ## using signal proxy turns original arguments into a tuple
-        if self._plt2.sceneBoundingRect().contains(pos):
-            mousePoint = self.vb.mapSceneToView(pos)
-            #index = int(mousePoint.x())
-            #if index > 0 and index < len(self.data):
-            #print(mousePoint.x())
-                    #label.setText("<span style='font-size: 12pt'>x=%0.1f,   <span style='color: red'>y1=%0.1f</span>,   <span style='color: green'>y2=%0.1f</span>" % (mousePoint.x(), data1[index], data2[index]))
-            self.vLine.setPos(mousePoint.x())
-            self.hLine.setPos(mousePoint.y())
-            
-    def timer_1(self):
-        self.timer = pg.QtCore.QTimer()
-        #self.timer.timeout.connect(self.dis_update)
-        self.timer.timeout.connect(self.update_otro)
-        
-    def reset_bufers(self):
-        self.t = 0
-        self.d_signal = self.d_signal*0
+    for band in eeg_bands:
+        freq_ix = np.where((freq_bands >= eeg_bands[band][0]) &
+                           (freq_bands <= eeg_bands[band][1]))[0]
+        eeg_band_fft[band] = np.mean(sp_bands[freq_ix])
 
-        
-#Instancia para iniciar una aplicacion en windows
-app = QApplication(sys.argv)
-#debemos crear un objeto para la clase creada arriba
-_mainWindow = mainWindow()
-    #muestra la ventana
-_mainWindow.show()
-    #ejecutar la aplicacion
-app.exec_()
+    # Plot EEG Bands
+    bg1 = pg.BarGraphItem(x=[1, 2, 3, 4, 5], height=[eeg_band_fft[band] for band in eeg_bands], width=0.6, brush='r')
+    waves_plot.clear()
+    waves_plot.addItem(bg1)
+
+
+# Define thread function
+def start_board():
+    board = OpenBCICyton(port='/dev/ttyUSB0', daisy=False)
+    board.start_stream(save_data)
+
+
+# Initialize Board and graphing update
+if __name__ == '__main__':
+    if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
+        x = threading.Thread(target=start_board)
+        x.daemon = True
+        x.start()
+
+        timer = QtCore.QTimer()
+        timer.timeout.connect(updater)
+        timer.start(0)
+
+        QtGui.QApplication.instance().exec_()
