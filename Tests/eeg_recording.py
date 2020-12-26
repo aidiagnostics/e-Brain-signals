@@ -1,8 +1,6 @@
-# Reference
-# 1. https://github.com/kevinmgamboa/Plotting_OpenBCI_Cyton_Data_live
+
 from pyOpenBCI import OpenBCICyton
 import time
-import threading
 #%%
 # --------------------
 # Functions Needed
@@ -13,17 +11,11 @@ def print_raw(sample):
 # --------------------
 # Setup
 # --------------------
-def start_cyton():
-    try:
-        board.start_stream(print_raw)
-    except:
-        pass
+uVolts_per_count = (4500000)/24/(2**23-1) #uV/count
+Volts_per_count = 1.2 * 8388607.0 * 1.5 * 51.0 #V/count
 # Connecting to board
 board = OpenBCICyton(port='/dev/ttyUSB0', daisy=False)
 #%%
-y = threading.Thread(target=start_cyton)
-y.daemon = True
-y.start()
-# print 5 seconds
-time.sleep(5)
+board.start_stream(print_raw)
+time.time(2)
 board.disconnect()
