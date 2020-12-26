@@ -12,6 +12,9 @@ import sys
 import numpy as np 
 import pyqtgraph as pg
 
+import pyOpenBCI as obci
+from pyOpenBCI import OpenBCICyton as cyton
+
 # sys.path.append('./')
 # import wavfile
 # GUI libraries
@@ -25,8 +28,11 @@ from os.path import dirname as up
 mf_path = (up(__file__)).replace('\\','/')    # Main Folder Path
 
 DT = 8    # Display Window lenght in time
-UPT = 1 # Update time miliseconds
+UPT = 1   # Update time miliseconds
 
+
+# def collect_eeg(sample):
+#     print("Data: %f, Lenght: %i " % (sample.channels_data[0], (sample.channels_data[0])))
 
 class mainWindow(QMainWindow):
     def __init__(self):
@@ -34,6 +40,7 @@ class mainWindow(QMainWindow):
         QMainWindow.__init__(self)
         # Loads an .ui file & configure UI
         loadUi("EEG_realtime_ui_v0.ui",self)
+        self.OBCI = cyton(port='/dev/ttyUSB0', daisy=False)
         #
 #        _translate = QtCore.QCoreApplication.translate
 #        QMainWindow.setWindowTitle('AID')
@@ -52,12 +59,18 @@ class mainWindow(QMainWindow):
         self.buttons()
         self.openF()
         self.timer_1()
-        
-        
+
+    def collect_eeg(self, sample):
+        print("Data: %f, Lenght: %i " % (sample.channels_data[0], (sample.channels_data[0])))
+
+        self._plt1.plot(y=list(sample.channels_data[0]), pen=self.plot_colors[0])
+
     def _update_plot(self):
         """
         Updates and redraws the graphics in the plot.
         """
+        #self.OBCI.start_stream(self.collect_eeg())
+
         self.duration = np.size(self.data._data[0]) * (1/self.fs)
         self.vectortime = np.linspace(0, self.duration, np.size(self.data._data[0]))
 
@@ -108,7 +121,6 @@ class mainWindow(QMainWindow):
         # self.file_path, _ = QtGui.QFileDialog.getOpenFileName(self, 'Open File')
         # # NOTE: 
         # self.data = mne.io.read_raw_edf(self.file_path, preload=True)
-        
 
         self.data = mne.io.read_raw_edf(mf_path+'/Tests/Test_data/PN00-1.edf', preload=True)
         self.fs = int(self.data.info['sfreq'])
@@ -116,25 +128,23 @@ class mainWindow(QMainWindow):
     
         print('sampling freq', str(self.fs))
         # plots the signal loaded
-        self._update_plot()  
-        
+        self._update_plot()
+
     def playB(self):
         """
         play the file 
         """
         print('playing')
-        self.timer.start(UPT)
+        self.OBCI.start_stream(self.collect_eeg)
+        #self.timer.start(UPT)
 
     def stopB(self):
         """
         play the audio file 
         """
         print('Stop')
-        
         self.timer.stop()
         self.reset_bufers()
-
-
     # ------------------------------------------------------------------------
                             # Plot Configuration
     # ------------------------------------------------------------------------
