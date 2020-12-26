@@ -1,8 +1,5 @@
-# Reference
-# 1. https://github.com/kevinmgamboa/Plotting_OpenBCI_Cyton_Data_live
 
 import sys
-
 from pyqtgraph.Qt import QtGui, QtCore
 import pyqtgraph as pg
 import random
