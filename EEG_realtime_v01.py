@@ -8,6 +8,7 @@ References:
 
 """
 import mne
+from time import time
 import sys
 import numpy as np 
 import pyqtgraph as pg
@@ -30,6 +31,16 @@ DT = 8    # Display Window lenght in time
 UPT = 1 # Update time miliseconds
 FS = 200
 uVolts_per_count = (4500000)/24/(2**23-1) #uV/count
+Data = 0
+
+
+def print_raw(sample):
+    global Data
+    # print("Data: %f, Lenght: %i " % (sample.channels_data[0], len(sample.channels_data)))
+    # 1st plot roll down one and replace leading edge with new data
+    Data = np.array(sample.channels_data[0] * uVolts_per_count) / 400000
+    print(Data)
+
 
 class mainWindow(QMainWindow):
     def __init__(self):
@@ -60,18 +71,47 @@ class mainWindow(QMainWindow):
         self.timer_1()
 
 
+    #
+    # def print_raw(self, sample):
+    #
+    #     # print("Data: %f, Lenght: %i " % (sample.channels_data[0], len(sample.channels_data)))
+    #     # 1st plot roll down one and replace leading edge with new data
+    #     self.d_signal = np.roll(self.d_signal, -1, 0)
+    #     self.d_signal[-1:] = np.array(sample.channels_data[0]*uVolts_per_count)/400000
+    #
+    #     self.Time = np.roll(self.Time, -1, 0)
+    #     self.Time[-1:] = self.t % (FS*DT)# np.linspace((self.t % 100 * (1 / FS)), ((1 + self.t % 100) * (1 / FS)), 1)
+    #
+    #     print("Data: %f, Time: %i " % (self.d_signal[-1:], self.Time[-1:]))
+    #
+    #
+    #     # self._plt1.clear()
+    #     # self._plt1.plot(x=self.Time, y=self.d_signal, pen=self.plot_colors[0])
+    #     #
+    #     # self._plt2.clear()
+    #     # self._plt2.plot(x=self.Time, y=self.d_signal, pen=self.plot_colors[0])
+    #
+    #     self.t += 1
 
-    def print_raw(self, sample):
-        # print("Data: %f, Lenght: %i " % (sample.channels_data[0], len(sample.channels_data)))
-        # 1st plot roll down one and replace leading edge with new data
+    def _update_plot(self):
+        """
+        Updates and redraws the graphics in the plot.
+        """
+        global Data
+        # self.duration = np.size(self.data._data[0]) * (1/self.fs)
+        # self.vectortime = np.linspace(0, self.duration, np.size(self.data._data[0]))
+        #
+        # self.data_P1 = ppf.vec_nor(self.data._data[0])
+        #
+        #print('HERE TOO')
         self.d_signal = np.roll(self.d_signal, -1, 0)
-        self.d_signal[-1:] = np.array(sample.channels_data[0]*uVolts_per_count)/400000
+        self.d_signal[-1:] = Data
 
         self.Time = np.roll(self.Time, -1, 0)
-        self.Time[-1:] = self.t % (FS*DT)# np.linspace((self.t % 100 * (1 / FS)), ((1 + self.t % 100) * (1 / FS)), 1)
+        self.Time[-1:] = self.t % (
+                    FS * DT)  # np.linspace((self.t % 100 * (1 / FS)), ((1 + self.t % 100) * (1 / FS)), 1)
 
-        #print("Data: %f, Time: %i " % (self.d_signal[-1:], self.Time[-1:]))
-
+        print("Data: %f, Time: %i " % (self.d_signal[-1:], self.Time[-1:]))
 
         self._plt1.clear()
         self._plt1.plot(x=self.Time, y=self.d_signal, pen=self.plot_colors[0])
@@ -81,17 +121,8 @@ class mainWindow(QMainWindow):
 
         self.t += 1
 
-    def _update_plot(self):
-        """
-        Updates and redraws the graphics in the plot.
-        """
-        # self.duration = np.size(self.data._data[0]) * (1/self.fs)
-        # self.vectortime = np.linspace(0, self.duration, np.size(self.data._data[0]))
-        #
-        # self.data_P1 = ppf.vec_nor(self.data._data[0])
-        #
         # self.vlabel = np.zeros(len(self.data_P1))
-        print("Data: %f, Time: %i " % (self.d_signal[-1:], self.Time[-1:]))
+        #print("Data: %f, Time: %i " % (self.d_signal[-1:], self.Time[-1:]))
         # Xf1 = 1+ppf.butter_bp_fil(self.data_P1, 40, 70, self.fs)
         # Xf2 = 2+ppf.butter_bp_fil(self.data_P1, 70, 100, self.fs)
         # Updating Plots
@@ -146,10 +177,12 @@ class mainWindow(QMainWindow):
         """
         play the file 
         """
-
-        self.board.start_stream(self.print_raw)
-        print('playing')
+        self.board.start_stream(print_raw)
         #self.timer.start(UPT)
+
+        print('playing')
+
+
 
     def stopB(self):
         """
