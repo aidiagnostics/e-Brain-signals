@@ -28,6 +28,8 @@ mf_path = (up(__file__)).replace('\\','/')    # Main Folder Path
 
 DT = 8    # Display Window lenght in time
 UPT = 1 # Update time miliseconds
+FS = 200
+uVolts_per_count = (4500000)/24/(2**23-1) #uV/count
 
 class mainWindow(QMainWindow):
     def __init__(self):
@@ -42,8 +44,9 @@ class mainWindow(QMainWindow):
         self.fs = None
         self.data = None
         self.data_P1 = None
-        self.t = -8
+        self.t = 0
         self.d_signal = np.zeros(512*DT)                 # Vector Label
+        self.Time = np.zeros(512*DT)
         self.duration = None
         self.vectortime = None
         self.file_path = str
@@ -59,43 +62,60 @@ class mainWindow(QMainWindow):
 
 
     def print_raw(self, sample):
-        print("Data: %f, Lenght: %i " % (sample.channels_data[0], len(sample.channels_data)))
+        # print("Data: %f, Lenght: %i " % (sample.channels_data[0], len(sample.channels_data)))
+        # 1st plot roll down one and replace leading edge with new data
+        self.d_signal = np.roll(self.d_signal, -1, 0)
+        self.d_signal[-1:] = np.array(sample.channels_data[0]*uVolts_per_count)/400000
+
+        self.Time = np.roll(self.Time, -1, 0)
+        self.Time[-1:] = self.t % (FS*DT)# np.linspace((self.t % 100 * (1 / FS)), ((1 + self.t % 100) * (1 / FS)), 1)
+
+        #print("Data: %f, Time: %i " % (self.d_signal[-1:], self.Time[-1:]))
+
+
+        self._plt1.clear()
+        self._plt1.plot(x=self.Time, y=self.d_signal, pen=self.plot_colors[0])
+
+        self._plt2.clear()
+        self._plt2.plot(x=self.Time, y=self.d_signal, pen=self.plot_colors[0])
+
+        self.t += 1
 
     def _update_plot(self):
         """
         Updates and redraws the graphics in the plot.
         """
-        self.duration = np.size(self.data._data[0]) * (1/self.fs)
-        self.vectortime = np.linspace(0, self.duration, np.size(self.data._data[0]))
-
-        self.data_P1 = ppf.vec_nor(self.data._data[0])
-        
-        self.vlabel = np.zeros(len(self.data_P1))
-        
+        # self.duration = np.size(self.data._data[0]) * (1/self.fs)
+        # self.vectortime = np.linspace(0, self.duration, np.size(self.data._data[0]))
+        #
+        # self.data_P1 = ppf.vec_nor(self.data._data[0])
+        #
+        # self.vlabel = np.zeros(len(self.data_P1))
+        print("Data: %f, Time: %i " % (self.d_signal[-1:], self.Time[-1:]))
         # Xf1 = 1+ppf.butter_bp_fil(self.data_P1, 40, 70, self.fs)
         # Xf2 = 2+ppf.butter_bp_fil(self.data_P1, 70, 100, self.fs)
         # Updating Plots
-        self._plt1.clear()
-        self._plt1.plot(x=list(self.vectortime), y=list(self.data_P1), pen=self.plot_colors[0])
-        #self._plt1.plot(x=list(self.vectortime), y=list(self.vlabel), pen=self.plot_colors[0])
-
-        self._plt2.clear()
-        self._plt2.plot(x=list(self.vectortime), y=list(self.data_P1), pen=self.plot_colors[0])
+        # self._plt1.clear()
+        # self._plt1.plot(x=list(self.vectortime), y=list(self.data_P1), pen=self.plot_colors[0])
+        # #self._plt1.plot(x=list(self.vectortime), y=list(self.vlabel), pen=self.plot_colors[0])
+        #
+        # self._plt2.clear()
+        # self._plt2.plot(x=list(self.vectortime), y=list(self.data_P1), pen=self.plot_colors[0])
         # self._plt2.plot(x=list(self.vectortime), y=list(Xf1), pen=self.plot_colors[1])
         # self._plt2.plot(x=list(self.vectortime), y=list(Xf2), pen=self.plot_colors[2])
 
-        # Add the LinearRegionItem to the ViewBox, but tell the ViewBox to exclude this 
+        # Add the LinearRegionItem to the ViewBox, but tell the ViewBox to exclude this
         # item when doing auto-range calculations.
-        self._plt1.addItem(self.region, ignoreBounds=True)      
-        self._plt2.setAutoVisible(y=True)
-        
-        self._plt2.addItem(self.region2, ignoreBounds=True) 
-        
-        self._plt2.addItem(self.vLine, ignoreBounds=True)
-        self._plt2.addItem(self.hLine, ignoreBounds=True)
-        
-        self.vb = self._plt2.vb
-        self.proxy = pg.SignalProxy(self._plt2.scene().sigMouseMoved, rateLimit=60, slot=self.mouseMoved)
+        # self._plt1.addItem(self.region, ignoreBounds=True)
+        # self._plt2.setAutoVisible(y=True)
+        #
+        # self._plt2.addItem(self.region2, ignoreBounds=True)
+        #
+        # self._plt2.addItem(self.vLine, ignoreBounds=True)
+        # self._plt2.addItem(self.hLine, ignoreBounds=True)
+        #
+        # self.vb = self._plt2.vb
+        # self.proxy = pg.SignalProxy(self._plt2.scene().sigMouseMoved, rateLimit=60, slot=self.mouseMoved)
     # ------------------------------------------------------------------------
                                      # Buttons
     # ------------------------------------------------------------------------
@@ -117,20 +137,18 @@ class mainWindow(QMainWindow):
         # self.data = mne.io.read_raw_edf(self.file_path, preload=True)
         
 
-        self.data = mne.io.read_raw_edf(mf_path+'/Tests/Test_data/PN00-1.edf', preload=True)
-        self.fs = int(self.data.info['sfreq'])
-        print('data uploaded', self.data)
-    
-        print('sampling freq', str(self.fs))
-        # plots the signal loaded
-        self._update_plot()  
+        # self.data = mne.io.read_raw_edf(mf_path+'/Tests/Test_data/PN00-1.edf', preload=True)
+        # self.fs = int(self.data.info['sfreq'])
+        # # plots the signal loaded
+        # self._update_plot()
         
     def playB(self):
         """
         play the file 
         """
-        print('playing')
+
         self.board.start_stream(self.print_raw)
+        print('playing')
         #self.timer.start(UPT)
 
     def stopB(self):
@@ -163,6 +181,8 @@ class mainWindow(QMainWindow):
         self._plt1.setLabel('bottom', "Tiempo", "s")
         self._plt1.setLabel('left', "Amplitud", "Volt")
         self._plt1.showGrid(x=False, y=False)
+        self._plt1.setYRange(-200, 200)
+        self._plt1.enableAutoRange('x', True)
         
         self.plt2.setBackground(background=None)
         self.plt2.setAntialiasing(True)
@@ -170,80 +190,84 @@ class mainWindow(QMainWindow):
         self._plt2.setLabel('bottom', "Tiempo", "s")
         self._plt2.setLabel('left', "Amplitud", "Volt")
         self._plt2.showGrid(x=False, y=False)
+        self._plt2.setYRange(0, 6)
+        self._plt2.setXRange(-1, DT)
+        self._plt2.enableAutoRange('x', True)
+        self._plt2.enableAutoRange('y', True)
         
-        # Region 1 
-        self.region = pg.LinearRegionItem()
-        self.region.setZValue(1)
-        
-        self.region.sigRegionChanged.connect(self.update)
-        self._plt2.sigRangeChanged.connect(self.updateRegion)
-        self.region.setRegion([0, DT])
-        # Setting Region 2
-        self.region2 = pg.LinearRegionItem()
-        self.region2.setZValue(1)
-        self.region2.setRegion([0, 0.5])
-               
-        self.region2.sigRegionChanged.connect(self.update2)
-        
-        # cross hair
-        self.vLine = pg.InfiniteLine(angle=90, movable=False, pen=[100,100,200,200])
-        self.hLine = pg.InfiniteLine(angle=0, movable=False, pen=[100,100,200,200])
+        # Region 1
+        # self.region = pg.LinearRegionItem()
+        # self.region.setZValue(1)
+        #
+        # self.region.sigRegionChanged.connect(self.update)
+        # self._plt2.sigRangeChanged.connect(self.updateRegion)
+        # self.region.setRegion([0, DT])
+        # # Setting Region 2
+        # self.region2 = pg.LinearRegionItem()
+        # self.region2.setZValue(1)
+        # self.region2.setRegion([0, 0.5])
+        #
+        # self.region2.sigRegionChanged.connect(self.update2)
+        #
+        # # cross hair
+        # self.vLine = pg.InfiniteLine(angle=90, movable=False, pen=[100,100,200,200])
+        # self.hLine = pg.InfiniteLine(angle=0, movable=False, pen=[100,100,200,200])
     # ------------------------------------------------------------------------
                              # Process - Updates
     # ------------------------------------------------------------------------    
     
-    def dis_update(self):
-        # 1st plot roll down one and replace leading edge with new data
-        self.d_signal = np.roll(self.d_signal, -self.fs, 0)
-        self.d_signal[-self.fs:] = self.data_P1[self.t*self.fs:(1+self.t)*self.fs]
-        
-        self._plt2.clear()
-        self._plt2.plot(x=list(self.vectortime[:self.fs*DT]), y=list(self.d_signal), pen=self.plot_colors[0])
-        
-        self.t+=1
-    
-    def update_otro(self):
-        self.region.setZValue(1)
-        minX, maxX = self.region.getRegion()     # get the min-max values of region
-        self._plt2.setXRange(self.t*1, (8+self.t), padding=0)
-        self.t+=1
-        
-        
-        
-    def update(self):
-        self.region.setZValue(1)
-        minX, maxX = self.region.getRegion()     # get the min-max values of region
-        self._plt2.setXRange(minX, maxX, padding=0)
-    
-    def updateRegion(self, window, viewRange):
-        rgn = viewRange[0]
-        self.region.setRegion(rgn)
-    
-    def update2(self):
-        self.region2.setZValue(-10)
-        self.minX2, self.maxX2 = self.region2.getRegion()     # get the min-max values of region
-#        self.label.setText("<span style='font-size: 12pt'>L1=%0.1f,   <span style='color: red'>L2=%0.1f</span>,   <span style='color: green'>L1-L2=%0.1f</span>" % (self.minX2, self.maxX2, abs(self.minX2-self.maxX2)))
-        #self._plt4.setXRange(minX3, maxX3, padding=0)
-        
-    def updateRegion2(self, window, viewRange):
-        rgn_f = viewRange[0]
-        self.region3.setRegion(rgn_f)
-    
-    def mouseMoved(self, evt):
-        pos = evt[0]  ## using signal proxy turns original arguments into a tuple
-        if self._plt2.sceneBoundingRect().contains(pos):
-            mousePoint = self.vb.mapSceneToView(pos)
-            #index = int(mousePoint.x())
-            #if index > 0 and index < len(self.data):
-            #print(mousePoint.x())
-                    #label.setText("<span style='font-size: 12pt'>x=%0.1f,   <span style='color: red'>y1=%0.1f</span>,   <span style='color: green'>y2=%0.1f</span>" % (mousePoint.x(), data1[index], data2[index]))
-            self.vLine.setPos(mousePoint.x())
-            self.hLine.setPos(mousePoint.y())
+#     def dis_update(self):
+#         # 1st plot roll down one and replace leading edge with new data
+#         self.d_signal = np.roll(self.d_signal, -self.fs, 0)
+#         self.d_signal[-self.fs:] = self.data_P1[self.t*self.fs:(1+self.t)*self.fs]
+#
+#         self._plt2.clear()
+#         self._plt2.plot(x=list(self.vectortime[:self.fs*DT]), y=list(self.d_signal), pen=self.plot_colors[0])
+#
+#         self.t+=1
+#
+#     def update_otro(self):
+#         self.region.setZValue(1)
+#         minX, maxX = self.region.getRegion()     # get the min-max values of region
+#         self._plt2.setXRange(self.t*1, (8+self.t), padding=0)
+#         self.t+=1
+#
+#
+#
+#     def update(self):
+#         self.region.setZValue(1)
+#         minX, maxX = self.region.getRegion()     # get the min-max values of region
+#         self._plt2.setXRange(minX, maxX, padding=0)
+#
+#     def updateRegion(self, window, viewRange):
+#         rgn = viewRange[0]
+#         self.region.setRegion(rgn)
+#
+#     def update2(self):
+#         self.region2.setZValue(-10)
+#         self.minX2, self.maxX2 = self.region2.getRegion()     # get the min-max values of region
+# #        self.label.setText("<span style='font-size: 12pt'>L1=%0.1f,   <span style='color: red'>L2=%0.1f</span>,   <span style='color: green'>L1-L2=%0.1f</span>" % (self.minX2, self.maxX2, abs(self.minX2-self.maxX2)))
+#         #self._plt4.setXRange(minX3, maxX3, padding=0)
+#
+#     def updateRegion2(self, window, viewRange):
+#         rgn_f = viewRange[0]
+#         self.region3.setRegion(rgn_f)
+#
+#     def mouseMoved(self, evt):
+#         pos = evt[0]  ## using signal proxy turns original arguments into a tuple
+#         if self._plt2.sceneBoundingRect().contains(pos):
+#             mousePoint = self.vb.mapSceneToView(pos)
+#             #index = int(mousePoint.x())
+#             #if index > 0 and index < len(self.data):
+#             #print(mousePoint.x())
+#                     #label.setText("<span style='font-size: 12pt'>x=%0.1f,   <span style='color: red'>y1=%0.1f</span>,   <span style='color: green'>y2=%0.1f</span>" % (mousePoint.x(), data1[index], data2[index]))
+#             self.vLine.setPos(mousePoint.x())
+#             self.hLine.setPos(mousePoint.y())
             
     def timer_1(self):
         self.timer = pg.QtCore.QTimer()
-        #self.timer.timeout.connect(self.dis_update)
-        self.timer.timeout.connect(self.update_otro)
+        #self.timer.timeout.connect(self.print_raw)
+        self.timer.timeout.connect(self._update_plot)
         
     def reset_bufers(self):
         self.t = 0
