@@ -18,12 +18,16 @@ def start_cyton():
         board.start_stream(print_raw)
     except:
         pass
+
+#%%
+
 # Connecting to board
 board = OpenBCICyton(port='/dev/ttyUSB0', daisy=False)
-#%%
+
 y = threading.Thread(target=start_cyton)
 y.daemon = True
+# First trial, starts board,wait 5 sec and stops streaming
 y.start()
-# print 5 seconds
-time.sleep(5)
-board.disconnect()
+time.sleep(10)
+board.stop_stream()
+print('finished')
