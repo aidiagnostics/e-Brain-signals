@@ -19,7 +19,7 @@ from PyQt5.uic import loadUi
 from PyQt5.QtWidgets import QApplication, QMainWindow
 from PyQt5 import QtWidgets, QtGui
 # Own Lobrary
-import ppfunctions_1 as ppf
+import main_functions as ppf
 
 from pyOpenBCI import OpenBCICyton
 
@@ -72,8 +72,8 @@ class mainWindow(QMainWindow):
         
         self.vlabel = np.zeros(len(self.data_P1))
         
-        # Xf1 = 1+ppf.butter_bp_fil(self.data_P1, 40, 70, self.fs)
-        # Xf2 = 2+ppf.butter_bp_fil(self.data_P1, 70, 100, self.fs)
+        # Xf1 = 1+ppf.butter_bp_fil(self.data_P1, 40, 70, self.sf)
+        # Xf2 = 2+ppf.butter_bp_fil(self.data_P1, 70, 100, self.sf)
         # Updating Plots
         self._plt1.clear()
         self._plt1.plot(x=list(self.vectortime), y=list(self.data_P1), pen=self.plot_colors[0])
