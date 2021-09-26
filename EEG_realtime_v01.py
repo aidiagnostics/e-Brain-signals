@@ -17,7 +17,6 @@ import pyqtgraph as pg
 # GUI libraries
 from PyQt5.uic import loadUi
 from PyQt5.QtWidgets import QApplication, QMainWindow
-from PyQt5 import QtWidgets, QtGui
 # Own Lobrary
 import main_functions as ppf
 

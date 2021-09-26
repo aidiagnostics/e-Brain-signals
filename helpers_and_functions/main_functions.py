@@ -638,17 +638,12 @@ def realtime_spectrogram(data, sf):
 
     # Initialising chunked-spectrograms variable
     X = []
-    for sample_idx in tqdm(range(len(data))):
-        ch1 = aid_spectrogram(data[sample_idx][0].astype('float64'), log=True, thresh=spec_thresh, fft_size=fft_size,
-                              step_size=step_size)
-        ch2 = aid_spectrogram(data[sample_idx][1].astype('float64'), log=True, thresh=spec_thresh, fft_size=fft_size,
-                              step_size=step_size)
-        chs = np.dstack((ch1, ch2))
-
-        X.append(chs)
-
-    print("Finished spectrogram transformation")
-
+    ch1 = aid_spectrogram(data[0].astype('float64'), log=True, thresh=spec_thresh, fft_size=fft_size,
+                          step_size=step_size)
+    ch2 = aid_spectrogram(data[1].astype('float64'), log=True, thresh=spec_thresh, fft_size=fft_size,
+                          step_size=step_size)
+    chs = np.dstack((ch1, ch2))
+    X.append(chs)
     return X
 
 def aid_spectrogram(d,log = True, thresh= 5, fft_size = 512, step_size = 64, window_type=0):
@@ -728,7 +723,7 @@ def overlapping(signal, stepsize=1, fs=1000, time_window=0.2, number_time_sample
         pass
     append = np.zeros((number_time_samples - len(signal) % number_time_samples))  #this calculates how many samples to add to the input vector for the windows to fit along it, and creates a zeros vector of that size.  
     signal = np.hstack((signal, append)) #completes the input vector with the zeros vector created in order to have an even number of windows fit in the data
-    result = np.vstack( signal[i:i+number_time_samples] for i in range(0,len(signal)-number_time_samples, stepsize))
+    result = np.vstack( signal[i:i+number_time_samples] for i in range(0, len(signal)-number_time_samples, stepsize))
     return result
 
 def stft(X, fftsize=40, step=66, mean_normalize=True, real=False, compute_onesided=True, window_type=0):
