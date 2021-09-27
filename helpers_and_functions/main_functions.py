@@ -638,13 +638,14 @@ def realtime_spectrogram(data, sf):
 
     # Initialising chunked-spectrograms variable
     X = []
-    ch1 = aid_spectrogram(data[0].astype('float64'), log=True, thresh=spec_thresh, fft_size=fft_size,
+    ch1 = aid_spectrogram(data[0], log=True, thresh=spec_thresh, fft_size=fft_size,
                           step_size=step_size)
-    ch2 = aid_spectrogram(data[1].astype('float64'), log=True, thresh=spec_thresh, fft_size=fft_size,
+    ch2 = aid_spectrogram(data[1], log=True, thresh=spec_thresh, fft_size=fft_size,
                           step_size=step_size)
     chs = np.dstack((ch1, ch2))
-    X.append(chs)
-    return X
+    chs = np.expand_dims(chs, axis=0).astype('float32')
+
+    return chs
 
 def aid_spectrogram(d,log = True, thresh= 5, fft_size = 512, step_size = 64, window_type=0):
     """

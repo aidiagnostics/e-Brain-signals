@@ -36,8 +36,7 @@ ch = signal._data[:2, :]
 samples = int(sf * 3)
 # Number of epochs in 3 seconds
 nep = int(ch.shape[1] / samples)
-
-# %%
+# initializing variables
 spectro = []
 predictions = []
 # Loop where signal is transformed into spectrogram
@@ -47,12 +46,10 @@ for n in tqdm(range(nep)):
                   ch[1][n * samples:(n + 1) * samples]]), sf)
 
     prediction = utils.predict_tfl(interpreter, input_details, output_details,
-                                   np.expand_dims(np.array(spectro_transform, dtype=np.float32), axis=0))
+                                   np.expand_dims(spectro_transform, axis=0))
 
     spectro.append(spectro_transform)
     predictions.append(prediction)
-
-
 
 # #%%
 # # ------------------------------------------------------------------------------------

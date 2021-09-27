@@ -9,49 +9,62 @@ References:
 """
 import mne
 import sys
-import numpy as np 
+import numpy as np
 import pyqtgraph as pg
+import tensorflow as tf
 
 # GUI libraries
 from PyQt5.uic import loadUi
 from PyQt5.QtWidgets import QApplication, QMainWindow
 from PyQt5 import QtWidgets
-# Own Lobrary
-import main_functions as ppf
+# Own Library
+from helpers_and_functions import utils, main_functions as ppf
 
 from os.path import dirname as up
-mf_path = (up(__file__)).replace('\\','/')    # Main Folder Path
 
-DT = 8    # Display Window lenght in time
+mf_path = (up(__file__)).replace('\\', '/')  # Main Folder Path
+
+DT = 8  # Display Window lenght in time
 UPT = 100  # Update time miliseconds
 
 
 class mainWindow(QMainWindow):
     def __init__(self):
-        #Inicia el objeto QMainWindow
+        # Inicia el objeto QMainWindow
         QMainWindow.__init__(self)
         # Loads an .ui file & configure UI
         loadUi("eeg_visualizer_ui.ui", self)
         #
-#        _translate = QtCore.QCoreApplication.translate
-#        QMainWindow.setWindowTitle('AID')
+        #        _translate = QtCore.QCoreApplication.translate
+        #        QMainWindow.setWindowTitle('AID')
         # Variables
         self.sf = None
         self.data = None
         self.data_P1 = None
         self.t = -8
-        self.d_signal = np.zeros(512*DT)                 # Vector Label
+        self.d_signal = np.zeros(512 * DT)  # Vector Label
         self.duration = None
         self.vectortime = None
         self.file_path = str
-        self.plot_colors = ['#ffee3d' , '#0072bd', '#d95319', '#bd0000']
+        self.plot_colors = ['#ffee3d', '#0072bd', '#d95319', '#bd0000']
         # Initial sub-functions
         self._configure_plot()
         self.buttons()
-        #self.openF()
+        # self.openF()
         self.timer_1()
-        
-        
+        # Setting model
+        self.model_configuration()
+
+    def model_configuration(self):
+        model_path = 'logs/9685_sleep_20210727_112442_spectrogram_sequential_4/9685_sleep_20210727_112442_spectrogram_sequential_4_model.tflite'
+        interpreter = tf.lite.Interpreter(model_path=model_path)
+        interpreter.allocate_tensors()
+        # Get input and output tensors.
+        input_details = interpreter.get_input_details()
+        output_details = interpreter.get_output_details()
+        self.m_data = [interpreter, input_details, output_details]
+
+
     def _update_plot(self):
         """
         Updates and redraws the graphics in the plot.
@@ -60,15 +73,15 @@ class mainWindow(QMainWindow):
         self.vectortime = np.linspace(0, self.duration, np.size(self.data._data[0]))
 
         self.data_P1 = ppf.vec_nor(self.data._data[0])
-        
+
         self.vlabel = np.zeros(len(self.data_P1))
-        
+
         # Xf1 = 1+ppf.butter_bp_fil(self.data_P1, 40, 70, self.sf)
         # Xf2 = 2+ppf.butter_bp_fil(self.data_P1, 70, 100, self.sf)
         # Updating Plots
         self._plt1.clear()
         self._plt1.plot(x=list(self.vectortime), y=list(self.data_P1), pen=self.plot_colors[0])
-        #self._plt1.plot(x=list(self.vectortime), y=list(self.vlabel), pen=self.plot_colors[0])
+        # self._plt1.plot(x=list(self.vectortime), y=list(self.vlabel), pen=self.plot_colors[0])
 
         self._plt2.clear()
         self._plt2.plot(x=list(self.vectortime), y=list(self.data_P1), pen=self.plot_colors[0])
@@ -77,18 +90,19 @@ class mainWindow(QMainWindow):
 
         # Add the LinearRegionItem to the ViewBox, but tell the ViewBox to exclude this 
         # item when doing auto-range calculations.
-        self._plt1.addItem(self.region, ignoreBounds=True)      
+        self._plt1.addItem(self.region, ignoreBounds=True)
         self._plt2.setAutoVisible(y=True)
-        
-        self._plt2.addItem(self.region2, ignoreBounds=True) 
-        
+
+        self._plt2.addItem(self.region2, ignoreBounds=True)
+
         self._plt2.addItem(self.vLine, ignoreBounds=True)
         self._plt2.addItem(self.hLine, ignoreBounds=True)
-        
+
         self.vb = self._plt2.vb
         self.proxy = pg.SignalProxy(self._plt2.scene().sigMouseMoved, rateLimit=60, slot=self.mouseMoved)
+
     # ------------------------------------------------------------------------
-                                     # Buttons
+    # Buttons
     # ------------------------------------------------------------------------
     def buttons(self):
         """
@@ -107,14 +121,16 @@ class mainWindow(QMainWindow):
         # NOTE: 
         self.data = mne.io.read_raw(self.file_path, preload=True)
 
-        #self.data = mne.io.read_raw_edf(mf_path+'/Tests/Test_data/PN00-1.edf', preload=True)
+        # self.data = mne.io.read_raw_edf(mf_path+'/Tests/Test_data/PN00-1.edf', preload=True)
         self.sf = int(self.data.info['sfreq'])
         print('data uploaded', self.data)
-    
+
         print('sampling freq', str(self.sf))
+        # empty vector, input for the model
+        self.input_signal = np.zeros(self.sf * 3)
         # plots the signal loaded
-        self._update_plot()  
-        
+        self._update_plot()
+
     def playB(self):
         """
         play the file 
@@ -127,42 +143,41 @@ class mainWindow(QMainWindow):
         play the audio file 
         """
         print('Stop')
-        
+
         self.timer.stop()
         self.reset_bufers()
 
-
     # ------------------------------------------------------------------------
-                            # Plot Configuration
+    # Plot Configuration
     # ------------------------------------------------------------------------
     def _configure_plot(self):
         """
         Configures specific elements of the PyQtGraph plots.
         :return:
         """
-        #self.mainW = pg.GraphicsWindow(title='Spectrogram', size=(800,600))
-        
-        #QMainWindow.setObjectName("AID")
-#        self.label = pg.LabelItem(justify='right')
-#        _mainWindow.addItem(self.label)
+        # self.mainW = pg.GraphicsWindow(title='Spectrogram', size=(800,600))
+
+        # QMainWindow.setObjectName("AID")
+        #        self.label = pg.LabelItem(justify='right')
+        #        _mainWindow.addItem(self.label)
         self.plt1.setBackground(background=None)
         self.plt1.setAntialiasing(True)
         self._plt1 = self.plt1.addPlot(row=1, col=1)
         self._plt1.setLabel('bottom', "Tiempo", "s")
         self._plt1.setLabel('left', "Amplitud", "Volt")
         self._plt1.showGrid(x=False, y=False)
-        
+
         self.plt2.setBackground(background=None)
         self.plt2.setAntialiasing(True)
         self._plt2 = self.plt2.addPlot(row=1, col=1)
         self._plt2.setLabel('bottom', "Tiempo", "s")
         self._plt2.setLabel('left', "Amplitud", "Volt")
         self._plt2.showGrid(x=False, y=False)
-        
+
         # Region 1 
         self.region = pg.LinearRegionItem()
         self.region.setZValue(1)
-        
+
         self.region.sigRegionChanged.connect(self.update)
         self._plt2.sigRangeChanged.connect(self.updateRegion)
         self.region.setRegion([0, DT])
@@ -170,82 +185,114 @@ class mainWindow(QMainWindow):
         self.region2 = pg.LinearRegionItem()
         self.region2.setZValue(1)
         self.region2.setRegion([0, 0.5])
-               
+
         self.region2.sigRegionChanged.connect(self.update2)
-        
+
         # cross hair
         self.vLine = pg.InfiniteLine(angle=90, movable=False, pen=[100, 100, 200, 200])
         self.hLine = pg.InfiniteLine(angle=0, movable=False, pen=[100, 100, 200, 200])
+
     # ------------------------------------------------------------------------
-                             # Process - Updates
+    # Process - Updates
     # ------------------------------------------------------------------------    
-    
+
     def dis_update(self):
         '''
         Updates the 2nd window to move the signal
         '''
+        print('dis')
         # 1st plot roll down one and replace leading edge with new data
         self.d_signal = np.roll(self.d_signal, -self.sf, 0)
         self.d_signal[-self.sf:] = self.data_P1[self.t * self.sf:(1 + self.t) * self.sf]
-        
+
+        if self.t % 3 == 2:
+
+            # queue for input signal for the model
+            self.input_signal = self.d_signal[-self.sf:]
+            # spectrogram
+            spectro_transform = ppf.realtime_spectrogram(
+                np.array([self.input_signal,self.input_signal]), self.sf)
+
+            # makes prediction
+            prediction = utils.predict_tfl(self.m_data[0], self.m_data[1], self.m_data[2],
+                                           np.expand_dims(spectro_transform, axis=0))
+            print(prediction)
+
+
         self._plt2.clear()
         self._plt2.plot(x=list(self.vectortime[:self.sf * DT]), y=list(self.d_signal), pen=self.plot_colors[0])
-        
+
         self.t += 1
-    
+
     def update_otro(self):
         self.region.setZValue(1)
-        minX, maxX = self.region.getRegion()     # get the min-max values of region
-        self._plt2.setXRange(self.t*1, (8+self.t), padding=0)
-        self.t+=1
-        
-        
-        
+        # minX, maxX = self.region.getRegion()  # get the min-max values of region
+        self._plt2.setXRange(self.t * 1, (8 + self.t), padding=0)
+        #---------------------------------------------------------------------
+        self.d_signal = np.roll(self.d_signal, -self.sf, 0)
+        self.d_signal[-self.sf:] = self.data_P1[self.t * self.sf:(1 + self.t) * self.sf]
+
+        if self.t % 3 == 2:
+            print('inside')
+            # queue for input signal for the model
+            self.input_signal = self.d_signal[-3*self.sf:]
+            # spectrogram
+            spectro_transform = ppf.realtime_spectrogram(
+                np.array([self.input_signal, self.input_signal]), self.sf)
+
+            # makes prediction
+            prediction = utils.predict_tfl(self.m_data[0], self.m_data[1], self.m_data[2],
+                                           np.expand_dims(spectro_transform, axis=0))
+            print(prediction)
+        #-----------------------------
+        self.t += 1
+
     def update(self):
         self.region.setZValue(1)
-        minX, maxX = self.region.getRegion()     # get the min-max values of region
+        minX, maxX = self.region.getRegion()  # get the min-max values of region
         self._plt2.setXRange(minX, maxX, padding=0)
-    
+
     def updateRegion(self, window, viewRange):
         rgn = viewRange[0]
         self.region.setRegion(rgn)
-    
+
     def update2(self):
         self.region2.setZValue(-10)
-        self.minX2, self.maxX2 = self.region2.getRegion()     # get the min-max values of region
-#        self.label.setText("<span style='font-size: 12pt'>L1=%0.1f,   <span style='color: red'>L2=%0.1f</span>,   <span style='color: green'>L1-L2=%0.1f</span>" % (self.minX2, self.maxX2, abs(self.minX2-self.maxX2)))
-        #self._plt4.setXRange(minX3, maxX3, padding=0)
-        
+        self.minX2, self.maxX2 = self.region2.getRegion()  # get the min-max values of region
+
+    #        self.label.setText("<span style='font-size: 12pt'>L1=%0.1f,   <span style='color: red'>L2=%0.1f</span>,   <span style='color: green'>L1-L2=%0.1f</span>" % (self.minX2, self.maxX2, abs(self.minX2-self.maxX2)))
+    # self._plt4.setXRange(minX3, maxX3, padding=0)
+
     def updateRegion2(self, window, viewRange):
         rgn_f = viewRange[0]
         self.region3.setRegion(rgn_f)
-    
+
     def mouseMoved(self, evt):
         pos = evt[0]  ## using signal proxy turns original arguments into a tuple
         if self._plt2.sceneBoundingRect().contains(pos):
             mousePoint = self.vb.mapSceneToView(pos)
-            #index = int(mousePoint.x())
-            #if index > 0 and index < len(self.data):
-            #print(mousePoint.x())
-                    #label.setText("<span style='font-size: 12pt'>x=%0.1f,   <span style='color: red'>y1=%0.1f</span>,   <span style='color: green'>y2=%0.1f</span>" % (mousePoint.x(), data1[index], data2[index]))
+            # index = int(mousePoint.x())
+            # if index > 0 and index < len(self.data):
+            # print(mousePoint.x())
+            # label.setText("<span style='font-size: 12pt'>x=%0.1f,   <span style='color: red'>y1=%0.1f</span>,   <span style='color: green'>y2=%0.1f</span>" % (mousePoint.x(), data1[index], data2[index]))
             self.vLine.setPos(mousePoint.x())
             self.hLine.setPos(mousePoint.y())
-            
+
     def timer_1(self):
         self.timer = pg.QtCore.QTimer()
-        #self.timer.timeout.connect(self.dis_update)
+        # self.timer.timeout.connect(self.dis_update)
         self.timer.timeout.connect(self.update_otro)
-        
+
     def reset_bufers(self):
         self.t = 0
-        self.d_signal = self.d_signal*0
+        self.d_signal = self.d_signal * 0
 
-        
-#Instancia para iniciar una aplicacion en windows
+
+# Instancia para iniciar una aplicacion en windows
 app = QApplication(sys.argv)
-#debemos crear un objeto para la clase creada arriba
+# debemos crear un objeto para la clase creada arriba
 _mainWindow = mainWindow()
-    #muestra la ventana
+# muestra la ventana
 _mainWindow.show()
-    #ejecutar la aplicacion
+# ejecutar la aplicacion
 app.exec_()
