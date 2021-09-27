@@ -124,9 +124,19 @@ def vec_nor(x):
     nVec = np.zeros(len(x));		   # Initializate derivate vector
     nVec = np.divide(x, max(x))
     nVec = nVec-np.mean(nVec);
-    nVec = np.divide(nVec,np.max(nVec));
+    nVec = np.divide(nVec, np.max(nVec));
         
     return nVec
+
+def nor_chns(data):
+    """
+    Nomalizes all data channels
+    @param data: data
+    @return: all channels normalized
+    """
+
+    ch1, ch2 = vec_nor(data._data[0]), vec_nor(data._data[1])
+    return np.array([ch1, ch2])
 
 def normalize_vector(vector, target_max,  target_min):
     """

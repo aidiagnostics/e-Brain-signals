@@ -42,7 +42,8 @@ class mainWindow(QMainWindow):
         self.data = None
         self.data_P1 = None
         self.t = -8
-        self.d_signal = np.zeros(512 * DT)  # Vector Label
+        self.ch1 = np.zeros(512 * DT)  # Vector Label
+        self.ch2 = np.zeros(512 * DT)
         self.duration = None
         self.vectortime = None
         self.file_path = str
@@ -72,19 +73,19 @@ class mainWindow(QMainWindow):
         self.duration = np.size(self.data._data[0]) * (1 / self.sf)
         self.vectortime = np.linspace(0, self.duration, np.size(self.data._data[0]))
 
-        self.data_P1 = ppf.vec_nor(self.data._data[0])
-
-        self.vlabel = np.zeros(len(self.data_P1))
+        # self.data_P1 = ppf.vec_nor(self.data._data[0])
+        self.data_P1 = ppf.nor_chns(self.data)
+        self.vlabel = np.zeros(len(self.data_P1[0]))
 
         # Xf1 = 1+ppf.butter_bp_fil(self.data_P1, 40, 70, self.sf)
         # Xf2 = 2+ppf.butter_bp_fil(self.data_P1, 70, 100, self.sf)
         # Updating Plots
         self._plt1.clear()
-        self._plt1.plot(x=list(self.vectortime), y=list(self.data_P1), pen=self.plot_colors[0])
+        self._plt1.plot(x=list(self.vectortime), y=list(self.data_P1[0]), pen=self.plot_colors[0])
         # self._plt1.plot(x=list(self.vectortime), y=list(self.vlabel), pen=self.plot_colors[0])
 
         self._plt2.clear()
-        self._plt2.plot(x=list(self.vectortime), y=list(self.data_P1), pen=self.plot_colors[0])
+        self._plt2.plot(x=list(self.vectortime), y=list(self.data_P1[0]), pen=self.plot_colors[0])
         # self._plt2.plot(x=list(self.vectortime), y=list(Xf1), pen=self.plot_colors[1])
         # self._plt2.plot(x=list(self.vectortime), y=list(Xf2), pen=self.plot_colors[2])
 
@@ -202,13 +203,13 @@ class mainWindow(QMainWindow):
         '''
         print('dis')
         # 1st plot roll down one and replace leading edge with new data
-        self.d_signal = np.roll(self.d_signal, -self.sf, 0)
-        self.d_signal[-self.sf:] = self.data_P1[self.t * self.sf:(1 + self.t) * self.sf]
+        self.ch1 = np.roll(self.ch1, -self.sf, 0)
+        self.ch1[-self.sf:] = self.data_P1[self.t * self.sf:(1 + self.t) * self.sf]
 
         if self.t % 3 == 2:
 
             # queue for input signal for the model
-            self.input_signal = self.d_signal[-self.sf:]
+            self.input_signal = self.ch1[-self.sf:]
             # spectrogram
             spectro_transform = ppf.realtime_spectrogram(
                 np.array([self.input_signal,self.input_signal]), self.sf)
@@ -220,25 +221,47 @@ class mainWindow(QMainWindow):
 
 
         self._plt2.clear()
-        self._plt2.plot(x=list(self.vectortime[:self.sf * DT]), y=list(self.d_signal), pen=self.plot_colors[0])
+        self._plt2.plot(x=list(self.vectortime[:self.sf * DT]), y=list(self.ch1), pen=self.plot_colors[0])
 
         self.t += 1
-
+    # def update_otro(self):
+    #     self.region.setZValue(1)
+    #     # minX, maxX = self.region.getRegion()  # get the min-max values of region
+    #     self._plt2.setXRange(self.t * 1, (8 + self.t), padding=0)
+    #     #---------------------------------------------------------------------
+    #     self.ch1 = np.roll(self.ch1, -self.sf, 0)
+    #     self.ch1[-self.sf:] = self.data_P1[0][self.t * self.sf:(1 + self.t) * self.sf]
+    #
+    #     if self.t % 3 == 2:
+    #         print('inside')
+    #         # queue for input signal for the model
+    #         self.input_signal = np.array([self.ch1[-3 * self.sf:], self.ch1[-3 * self.sf:]])
+    #         # spectrogram
+    #         spectro_transform = ppf.realtime_spectrogram(self.input_signal, self.sf)
+    #
+    #         # makes prediction
+    #         prediction = utils.predict_tfl(self.m_data[0], self.m_data[1], self.m_data[2],
+    #                                        np.expand_dims(spectro_transform, axis=0))
+    #         print(prediction)
+    #     #-----------------------------
+    #     self.t += 1
     def update_otro(self):
         self.region.setZValue(1)
         # minX, maxX = self.region.getRegion()  # get the min-max values of region
         self._plt2.setXRange(self.t * 1, (8 + self.t), padding=0)
         #---------------------------------------------------------------------
-        self.d_signal = np.roll(self.d_signal, -self.sf, 0)
-        self.d_signal[-self.sf:] = self.data_P1[self.t * self.sf:(1 + self.t) * self.sf]
+        self.ch1 = np.roll(self.ch1, -self.sf, 0)
+        self.ch1[-self.sf:] = self.data_P1[0][self.t * self.sf:(1 + self.t) * self.sf]
+
+        self.ch2 = np.roll(self.ch2, -self.sf, 0)
+        self.ch2[-self.sf:] = self.data_P1[1][self.t * self.sf:(1 + self.t) * self.sf]
 
         if self.t % 3 == 2:
             print('inside')
             # queue for input signal for the model
-            self.input_signal = self.d_signal[-3*self.sf:]
+            self.input_signal = np.array([self.ch1[-3 * self.sf:], self.ch2[-3 * self.sf:]])
             # spectrogram
-            spectro_transform = ppf.realtime_spectrogram(
-                np.array([self.input_signal, self.input_signal]), self.sf)
+            spectro_transform = ppf.realtime_spectrogram(self.input_signal, self.sf)
 
             # makes prediction
             prediction = utils.predict_tfl(self.m_data[0], self.m_data[1], self.m_data[2],
@@ -285,7 +308,7 @@ class mainWindow(QMainWindow):
 
     def reset_bufers(self):
         self.t = 0
-        self.d_signal = self.d_signal * 0
+        self.ch1 = self.ch1 * 0
 
 
 # Instancia para iniciar una aplicacion en windows
